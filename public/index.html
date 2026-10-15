@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viewer Media & Playlist</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 30px; background-color: #f4f4f9; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        input { width: 75%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 10px; }
+        button { padding: 10px 20px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 5px; font-weight: bold; }
+        button:hover { background: #218838; }
+        
+        /* Area Player Utama */
+        #main-player { margin-top: 20px; min-height: 200px; background: #000; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; }
+        video, img { max-width: 100%; max-height: 500px; border-radius: 10px; }
+
+        /* Area Playlist */
+        #playlist-container { margin-top: 20px; text-align: left; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
+        .playlist-item { padding: 10px; border-bottom: 1px solid #ddd; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.3s; }
+        .playlist-item:hover { background-color: #e2e6ea; }
+        .playlist-item.active { background-color: #cce5ff; font-weight: bold; border-left: 4px solid #0056b3; }
+        .status-loading { color: orange; font-size: 0.9em; }
+        .status-error { color: red; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Viewer Media dengan Playlist</h2>
+        <input type="text" id="urlInput" placeholder="Paste banyak link sekaligus di sini...">
+        <button onclick="loadMedia()">Proses Semua Link</button>
+
+        <!-- Tempat Video Diputar -->
+        <div id="main-player">
+            <i>Pemutar media akan muncul di sini...</i>
+        </div>
+
+        <!-- Tempat Daftar Playlist -->
+        <div id="playlist-container" style="display: none;">
+            <h3>Daftar Putar</h3>
+            <div id="playlist-items"></div>
+        </div>
+    </div>
+
+    <script>
+        async function loadMedia() {
+            const rawInput = document.getElementById('urlInput').value;
+            const player = document.getElementById('main-player');
+            const playlistContainer = document.getElementById('playlist-container');
+            const playlistItems = document.getElementById('playlist-items');
+            
+            if (!rawInput) return alert('Masukkan URL terlebih dahulu!');
+
+            // Ambil SEMUA link yang ada di dalam teks menggunakan regex
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const extractedUrls = rawInput.match(urlRegex);
+
+            if (!extractedUrls || extractedUrls.length === 0) {
+                player.innerHTML = '<p style="color:red;">Tidak ditemukan link URL yang valid.</p>';
+                return;
+            }
+
+            // Reset tampilan
+            player.innerHTML = '<i>Sedang memproses link pertama...</i>';
+            playlistItems.innerHTML = ''; 
+            playlistContainer.style.display = 'block';
+
+            let isFirstVideoPlayed = false;
+
+            // Looping untuk memproses setiap link yang ditemukan
+            for (let i = 0; i < extractedUrls.length; i++) {
+                const url = extractedUrls[i];
+                
+                // Buat elemen list untuk playlist
+                const item = document.createElement('div');
+                item.className = 'playlist-item';
+                item.innerHTML = `<span>🎥 Video ${i + 1}</span> <span class="status-loading">Memproses...</span>`;
+                playlistItems.appendChild(item);
+
+                try {
+                    // Panggil API backend kita
+                    const response = await fetch(`/api/extract?url=${encodeURIComponent(url)}`);
+                    const data = await response.json();
+
+                    if (data.success) {
+                        item.innerHTML = `<span>🎥 Video ${i + 1}</span>`;
+                        
+                        // Tambahkan event klik untuk memutar video ini
+                        item.onclick = function() {
+                            playMedia(data.mediaUrl, data.type, item);
+                        };
+
+                        // Otomatis putar video pertama yang berhasil di-scrape
+                        if (!isFirstVideoPlayed) {
+                            playMedia(data.mediaUrl, data.type, item);
+                            isFirstVideoPlayed = true;
+                        }
+                    } else {
+                        item.innerHTML = `<span>❌ Video ${i + 1}</span> <span class="status-error">Gagal Ekstrak</span>`;
+                        item.style.cursor = 'not-allowed';
+                    }
+                } catch (error) {
+                    item.innerHTML = `<span>❌ Video ${i + 1}</span> <span class="status-error">Error Server</span>`;
+                    item.style.cursor = 'not-allowed';
+                }
+            }
+        }
+
+        // Fungsi untuk memutar media dan menandai playlist yang aktif
+        function playMedia(mediaUrl, type, clickedElement) {
+            const player = document.getElementById('main-player');
+            
+            // Hapus class 'active' dari semua item playlist
+            const allItems = document.querySelectorAll('.playlist-item');
+            allItems.forEach(el => el.classList.remove('active'));
+            
+            // Tambahkan class 'active' ke item yang diklik
+            if (clickedElement) clickedElement.classList.add('active');
+
+            // Tampilkan media
+            if (type === 'video' || mediaUrl.match(/\.(mp4|webm|mkv)/i)) {
+                player.innerHTML = `<video controls autoplay src="${mediaUrl}"></video>`;
+            } else {
+                player.innerHTML = `<img src="${mediaUrl}" alt="Hasil Scraping">`;
+            }
+        }
+    </script>
+</body>
+</html>
